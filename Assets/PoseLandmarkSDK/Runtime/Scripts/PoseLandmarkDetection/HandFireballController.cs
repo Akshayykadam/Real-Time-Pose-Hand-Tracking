@@ -12,6 +12,13 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
         [Header("Fireball Settings")]
         [SerializeField] private GameObject _fireballPrefab;
         [SerializeField] private float _visibilityThreshold = 0.5f;
+        
+        [Header("Palm Offset (adjust to move from wrist to palm)")]
+        [Tooltip("Offset in normalized coordinates. Positive X moves right, positive Y moves up.")]
+        [SerializeField] private Vector2 _leftPalmOffset = new Vector2(0f, 0.08f);
+        [SerializeField] private Vector2 _rightPalmOffset = new Vector2(0f, 0.08f);
+        [Tooltip("Use finger landmarks to calculate direction towards palm automatically")]
+        [SerializeField] private bool _useSmartPalmOffset = true;
 
         private GameObject _leftHandFireball;
         private GameObject _rightHandFireball;
@@ -100,8 +107,9 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                     var landmarks = _currentTarget.poseLandmarks[0]; // First detected person
                     
                     // Wrist Indices: Left(15), Right(16)
-                    UpdateFireball(_leftHandFireball, landmarks.landmarks, 15);
-                    UpdateFireball(_rightHandFireball, landmarks.landmarks, 16);
+                    // Index finger MCP: Left(19), Right(20) - used for smart offset direction
+                    UpdateFireball(_leftHandFireball, landmarks.landmarks, 15, 19, _leftPalmOffset);
+                    UpdateFireball(_rightHandFireball, landmarks.landmarks, 16, 20, _rightPalmOffset);
                 }
                 else
                 {
@@ -110,16 +118,42 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             }
         }
 
-        private void UpdateFireball(GameObject fireball, List<Mediapipe.Tasks.Components.Containers.NormalizedLandmark> landmarks, int index)
+        private void UpdateFireball(GameObject fireball, List<Mediapipe.Tasks.Components.Containers.NormalizedLandmark> landmarks, int wristIndex, int fingerIndex, Vector2 palmOffset)
         {
             if (fireball == null) return;
             
-            if (index < landmarks.Count)
+            if (wristIndex < landmarks.Count)
             {
-                var lm = landmarks[index];
+                var lm = landmarks[wristIndex];
                 if (lm.visibility > _visibilityThreshold || lm.presence > _visibilityThreshold) // Check visibility
                 {
                     fireball.SetActive(true);
+                    
+                    float finalX = lm.x;
+                    float finalY = lm.y;
+                    
+                    if (_useSmartPalmOffset && fingerIndex < landmarks.Count)
+                    {
+                        // Calculate direction from wrist to finger (towards palm)
+                        var fingerLm = landmarks[fingerIndex];
+                        float dirX = fingerLm.x - lm.x;
+                        float dirY = fingerLm.y - lm.y;
+                        float len = Mathf.Sqrt(dirX * dirX + dirY * dirY);
+                        
+                        if (len > 0.001f)
+                        {
+                            // Normalize and apply offset magnitude
+                            float offsetMagnitude = palmOffset.magnitude;
+                            finalX += (dirX / len) * offsetMagnitude;
+                            finalY += (dirY / len) * offsetMagnitude;
+                        }
+                    }
+                    else
+                    {
+                        // Apply static offset
+                        finalX += palmOffset.x;
+                        finalY -= palmOffset.y; // Invert Y because MediaPipe Y is inverted
+                    }
                     
                     // Convert coords
                     float w = _rectTransform.rect.width;
@@ -127,9 +161,9 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                     
                     // MediaPipe: 0,0 Top-Left. Unity UI: 0,0 Center (usually).
                     // x maps 0..1 to -w/2 .. w/2
-                    float x = (lm.x - 0.5f) * w;
+                    float x = (finalX - 0.5f) * w;
                     // y maps 0..1 to h/2 .. -h/2 (inverted)
-                    float y = (0.5f - lm.y) * h;
+                    float y = (0.5f - finalY) * h;
                     
                     if (TryGetComponent<RectTransform>(out var rt))
                     {
@@ -137,12 +171,12 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                          frt.anchoredPosition = new Vector2(x, y);
                          // Force Z to 0 to ensure it's not behind canvas
                          frt.localPosition = new Vector3(frt.localPosition.x, frt.localPosition.y, 0f);
-                         // Debug.Log($"Fireball {index} at {x}, {y} (Vis: {lm.visibility})");
+                         // Debug.Log($"Fireball {wristIndex} at {x}, {y} (Vis: {lm.visibility})");
                     }
                 }
                 else
                 {
-                    // Debug.Log($"Fireball {index} hidden (Low Visibility: {lm.visibility})");
+                    // Debug.Log($"Fireball {wristIndex} hidden (Low Visibility: {lm.visibility})");
                     fireball.SetActive(false);
                 }
             }
