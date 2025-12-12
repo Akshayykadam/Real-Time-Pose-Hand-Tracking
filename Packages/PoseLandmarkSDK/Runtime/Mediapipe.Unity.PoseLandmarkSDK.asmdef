@@ -1,0 +1,16 @@
+{
+    "name": "Mediapipe.Unity.PoseLandmarkSDK",
+    "rootNamespace": "Mediapipe.Unity.PoseLandmarkSDK",
+    "references": [
+        "Mediapipe.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

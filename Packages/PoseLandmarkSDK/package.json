@@ -1,0 +1,16 @@
+{
+  "name": "com.github.homuler.mediapipe.pose-landmark-sdk",
+  "version": "1.0.0",
+  "displayName": "Pose Landmark Detection SDK",
+  "description": "A standalone SDK for Pose Landmark Detection using MediaPipe Unity Plugin.",
+  "unity": "2021.3",
+  "dependencies": {
+    "com.github.homuler.mediapipe": "0.16.2"
+  },
+  "keywords": [
+    "mediapipe",
+    "pose",
+    "landmark",
+    "detection"
+  ]
+}

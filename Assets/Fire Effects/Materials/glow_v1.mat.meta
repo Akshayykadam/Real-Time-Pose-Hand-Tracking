@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 35b62cf0fbfed8940a26d5c65f16088a
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 318184
+  packageName: Fx Pack - Fire Effects
+  packageVersion: 0.0.1
+  assetPath: Assets/PolyOne/Fire Effects/Materials/glow_v1.mat
+  uploadId: 754419
