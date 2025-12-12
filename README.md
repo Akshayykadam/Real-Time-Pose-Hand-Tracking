@@ -2,6 +2,9 @@
 
 A high-performance Unity SDK for real-time human pose and hand landmark detection using **MediaPipe**. This project enables accurate body pose estimation and hand tracking on both mobile devices (Android/iOS) and the Unity Editor.
 
+![GIF-2025-12-12-18-27-49](https://github.com/user-attachments/assets/83020b12-8e1e-46de-b2ad-4525c188f0d0)
+
+
 ![Unity](https://img.shields.io/badge/Unity-2021.3+-black?logo=unity)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-0.16.3-blue)
 ![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Editor-green)
@@ -170,12 +173,4 @@ This project is licensed under the MIT License.
 
 ---
 
-## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
