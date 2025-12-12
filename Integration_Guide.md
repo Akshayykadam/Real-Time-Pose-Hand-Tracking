@@ -1,89 +1,230 @@
-# Pose Landmark Detection SDK - Integration & Fixes Guide
+# Pose Landmark Detection SDK - Integration Guide
 
-This document details the setup, configuration, and fixes implemented to achieve a fully functional, high-performance Pose Detection app on Mobile and Editor.
-
-## 1. Quick Start (Setup Scene)
-
-We have created an automated tool to set up the scene instantly.
-
-1.  In the Unity Editor menu, go to **Tools > Pose SDK**.
-2.  Click **Setup Scene**.
-3.  This will create a [PoseLandmarkDetection](file:///Users/akshaykadam/Documents/UnityApps/Pose%20Landmark%20Detection%20SDK/Packages/PoseLandmarkSDK/Runtime/Scripts/PoseLandmarkDetection/PoseLandmarkDetectionConfig.cs#23-80) scene with:
-    *   **Bootstrap**: Initializes MediaPipe.
-    *   **PoseDetector**: Runs the AI and handles Rendering.
-    *   **Canvas/RawImage**: Displays the camera feed.
-
-## 2. Critical Fixes Implemented
-
-We resolved several blocking issues to ensure stability and visibility:
-
-### 2.1. Rendering & Visibility
-*   **Fix**: Visible 3D Landmarks.
-    *   *Issue*: Landmarks were invisible because they are 3D meshes, and the default Canvas was "Overlay".
-    *   *Solution*: Switched Canvas to **Screen Space - Camera** and linked the Main Camera.
-*   **Fix**: Camera Zoom / Scaling.
-    *   *Issue*: Camera was zoomed in or cropped on mobile (Portrait vs Landscape mismatch).
-    *   *Solution*: Implemented **Rotation-Aware Aspect Fit** in [Screen.cs](file:///Users/akshaykadam/Documents/UnityApps/Pose%20Landmark%20Detection%20SDK/Assets/PoseLandmarkSDK/Runtime/Scripts/Core/Screen.cs). The rendering now automatically handles device rotation and "Letterboxes" the image to ensure the **full field of view** is always visible.
-
-### 2.2. Mobile Specifics
-*   **Fix**: Front-Facing Camera Default.
-    *   *Solution*: Updated [WebCamSource.cs](file:///Users/akshaykadam/Documents/UnityApps/Pose%20Landmark%20Detection%20SDK/Assets/PoseLandmarkSDK/Runtime/Scripts/Core/ImageSource/WebCamSource.cs) to prioritize the **Front (Selfie)** camera on mobile devices automatically.
-*   **Fix**: Android Permissions Crash.
-    *   *Issue*: App would fail on first launch because it didn't wait for the user to click "Allow".
-    *   *Solution*: Updated permission logic to **WaitUntil** the user explicitly grants permission before initializing the camera.
-
-### 2.3. Performance (Lag on Pixel/High-End Devices)
-*   **Fix**: Forced GPU Inference.
-    *   *Issue*: The app defaulted to CPU, causing massive lag (2-3 FPS) on devices like Pixel 9 Pro.
-    *   *Solution*: Modified [PoseLandmarkDetectionConfig.cs](file:///Users/akshaykadam/Documents/UnityApps/Pose%20Landmark%20Detection%20SDK/Packages/PoseLandmarkSDK/Runtime/Scripts/PoseLandmarkDetection/PoseLandmarkDetectionConfig.cs) to FORCE **ImageReadMode.GPU** on Android/iOS.
-    *   *Requirement*: You must use **OpenGLES3** (see Configuration below).
-
-### 2.4. Runtime Errors
-*   **Fix**: `NullReferenceException` / Prefab Errors.
-    *   *Solution*: Replaced the default mask controller with a custom `SimplePoseAnnotationController` that safely instantiates prefabs at runtime.
+A complete guide to integrating real-time pose detection into your Unity project.
 
 ---
 
-## 3. Configuration Guide
+## Prerequisites
 
-### 3.1. Setting Resolution (2K / 4K)
-To improve detection accuracy/quality:
-1.  Find the **[AppSettings](file:///Users/akshaykadam/Documents/UnityApps/Pose%20Landmark%20Detection%20SDK/Packages/PoseLandmarkSDK/Runtime/Scripts/Common/AppSettings.cs#13-93)** asset (ScriptableObject) in your Project.
-2.  Under **WebCam Source**, find **Preferred Default Web Cam Width**.
-3.  Set it to your desired width (e.g., `2560` for 2K, `3840` for 4K).
-4.  The system will attempt to find the closest available resolution.
-
-### 3.2. Adjusting Landmark Visuals
-1.  Open the **`MultiPoseLandmarkList Annotation`** prefab (in `Assets/PoseLandmarkSDK/Runtime/Prefabs` or linked in the scene).
-2.  Adjust **Connection Width** (Range increased to 0-20) to make lines thicker/thinner.
-3.  Adjust **Landmark Radius** to change point size.
+| Requirement | Version |
+|-------------|---------|
+| Unity | 2021.3 LTS or higher |
+| MediaPipe Unity Plugin | v0.16.0+ |
+| Target Platform | Android / iOS / Editor |
 
 ---
 
-## 4. Mobile Requirements (CRITICAL)
+## Step 1: Install Dependencies
 
-For the **GPU Performance Mode** to work, you must configure your Player Settings correctly.
+### 1.1 Install MediaPipe Unity Plugin
 
-### Android
-1.  Go to **Project Settings > Player > Android > Other Settings**.
-2.  **Uncheck** `Auto Graphics API`.
-3.  **Vulkan** is NOT supported by MediaPipe GPU. **Remove it**.
-4.  Add/Ensure **OpenGLES3** is the first/only API in the list.
-5.  Set **Min API Level** to Android 7.0 (Nougat) or higher.
+1. Download the latest `.tgz` from [MediaPipe Unity Plugin Releases](https://github.com/homuler/MediaPipeUnityPlugin/releases)
+2. In Unity: **Window → Package Manager → + → Add package from tarball...**
+3. Select the downloaded `com.github.homuler.mediapipe-*.tgz` file
+
+### 1.2 Install Pose Landmark SDK
+
+**Option A: Local Package (Recommended)**
+1. Copy the `PoseLandmarkSDK` folder to your project's `Packages/` directory
+2. Unity will auto-detect and import it
+
+**Option B: From Assets**
+1. Copy `PoseLandmarkSDK` folder to `Assets/`
+
+---
+
+## Step 2: Scene Setup (Automated)
+
+The SDK includes an automated setup tool:
+
+1. Go to **Tools → Pose SDK → Setup Scene**
+2. This creates a ready-to-use scene with:
+   - **Bootstrap** - Initializes MediaPipe
+   - **PoseDetector** - Runs AI inference
+   - **Canvas/RawImage** - Displays camera feed with pose overlay
+
+> [!TIP]
+> The automated setup handles all camera, canvas, and annotation configuration.
+
+---
+
+## Step 3: Manual Scene Setup
+
+If you prefer manual setup:
+
+### 3.1 Create Bootstrap
+
+```
+Hierarchy:
+└── Bootstrap (GameObject)
+    └── Add Component: Bootstrap.cs
+```
+
+### 3.2 Create Canvas & Camera Display
+
+```
+Hierarchy:
+└── Canvas
+    ├── Render Mode: Screen Space - Camera
+    ├── Render Camera: Main Camera
+    └── RawImage
+        └── Stretch to fill canvas (Anchor: 0,0 to 1,1)
+```
+
+### 3.3 Create Pose Detector
+
+```
+Hierarchy:
+└── Canvas
+    └── RawImage
+        └── PoseDetector (GameObject)
+            ├── Add Component: PoseLandmarkerRunner
+            ├── Add Component: SimplePoseAnnotationController
+            └── Annotation: MultiPoseLandmarkListAnnotation (Prefab)
+```
+
+### 3.4 Configure Inspector
+
+| Component | Setting | Value |
+|-----------|---------|-------|
+| PoseLandmarkerRunner | Config → Model | Full (recommended) |
+| PoseLandmarkerRunner | Config → Running Mode | Live Stream |
+| PoseLandmarkerRunner | Image Source | WebCamSource component |
+
+---
+
+## Step 4: Platform Configuration
+
+### Android (Required)
+
+1. **Project Settings → Player → Android → Other Settings**
+2. **Uncheck** `Auto Graphics API`
+3. **Remove Vulkan** (not supported by MediaPipe GPU)
+4. **Add OpenGLES3** as the primary Graphics API
+5. Set **Minimum API Level** to Android 7.0 (API 24)+
 
 ### iOS
-1.  Ensure **Metal** is enabled (standard default).
-2.  Camera Usage Description must be set in Info.plist.
+
+1. Ensure **Metal** is enabled (default)
+2. Add **Camera Usage Description** in Player Settings
 
 ---
 
-## 5. Troubleshooting
+## Step 5: Optional Features
 
-*   **"ImageReadMode.GPU is not supported" in Editor**:
-    *   This is normal. The code automatically falls back to CPU in the Editor to prevent crashes. It only uses GPU on the actual device.
-*   **Black Screen on Device**:
-    *   Check if you are using **Vulkan**. You must use **OpenGLES3**.
-    *   Check if Permissions were denied. Uninstall and Reinstall to prompt again.
-*   **Landmarks "Floating" or Misaligned**:
-    *   Ensure the **PoseDetector** GameObject is a child of the **RawImage** in the Hierarchy.
-    *   Ensure the **Canvas Render Mode** is `Screen Space - Camera`.
+### 5.1 Hand Fireball Effect
+
+Add visual effects to detected wrist/palm landmarks:
+
+1. Replace `SimplePoseAnnotationController` with `HandFireballController`
+2. Assign a fireball VFX prefab to **Fireball Prefab** field
+3. Adjust **Palm Offset** to position effect on palm instead of wrist
+
+| Setting | Description |
+|---------|-------------|
+| Left/Right Palm Offset | Offset from wrist towards palm (normalized coordinates) |
+| Use Smart Palm Offset | Auto-calculate direction based on finger landmarks |
+| Visibility Threshold | Minimum confidence to show effect (0-1) |
+
+### 5.2 Adjusting Landmark Visuals
+
+1. Locate **MultiPoseLandmarkListAnnotation** prefab
+2. Modify **Connection Width** (0-20) for line thickness
+3. Modify **Landmark Radius** for point size
+
+### 5.3 Camera Resolution
+
+1. Find **AppSettings** ScriptableObject in project
+2. Set **Preferred Default Web Cam Width**:
+   - `1920` for Full HD
+   - `2560` for 2K
+   - `3840` for 4K
+
+---
+
+## Code Examples
+
+### Basic Pose Detection
+
+```csharp
+using UnityEngine;
+using Mediapipe.Unity.PoseLandmarkSDK;
+
+public class MyPoseApp : MonoBehaviour
+{
+    [SerializeField] private PoseLandmarkerRunner _runner;
+
+    void Start()
+    {
+        // Runner auto-starts if configured correctly
+        // Access pose data via _runner events
+    }
+}
+```
+
+### Custom Annotation Controller
+
+```csharp
+using UnityEngine;
+using Mediapipe.Unity.PoseLandmarkSDK;
+using Mediapipe.Tasks.Vision.PoseLandmarker;
+
+public class CustomPoseController : SimplePoseAnnotationController
+{
+    protected override void SyncNow()
+    {
+        base.SyncNow(); // Draw skeleton
+        
+        // Access landmarks
+        if (_currentTarget.poseLandmarks?.Count > 0)
+        {
+            var landmarks = _currentTarget.poseLandmarks[0].landmarks;
+            // landmarks[0] = nose
+            // landmarks[15] = left wrist
+            // landmarks[16] = right wrist
+            // See MediaPipe documentation for full list
+        }
+    }
+}
+```
+
+---
+
+## Landmark Reference
+
+| Index | Landmark |
+|-------|----------|
+| 0 | Nose |
+| 11 | Left Shoulder |
+| 12 | Right Shoulder |
+| 13 | Left Elbow |
+| 14 | Right Elbow |
+| 15 | Left Wrist |
+| 16 | Right Wrist |
+| 19 | Left Index Finger |
+| 20 | Right Index Finger |
+| 23 | Left Hip |
+| 24 | Right Hip |
+| 25 | Left Knee |
+| 26 | Right Knee |
+| 27 | Left Ankle |
+| 28 | Right Ankle |
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **Black screen on Android** | Ensure OpenGLES3 is set (not Vulkan). Check camera permissions. |
+| **Low FPS / Lag** | SDK uses GPU by default. Verify OpenGLES3 is enabled. |
+| **Landmarks misaligned** | Ensure PoseDetector is child of RawImage. Canvas must be Screen Space - Camera. |
+| **ImageReadMode.GPU not supported** | Normal in Editor. GPU mode only works on device. |
+| **Permissions denied** | Uninstall app and reinstall to re-prompt permissions. |
+
+---
+
+## Support
+
+- **MediaPipe Unity Plugin**: [GitHub Repository](https://github.com/homuler/MediaPipeUnityPlugin)
+- **Pose Landmark Model**: [MediaPipe Pose Documentation](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker)
