@@ -1,176 +1,126 @@
-# 🏃‍♂️ Real-Time Pose & Hand Tracking
+# Fruit Ninja Hand Tracking Game
 
-A high-performance Unity SDK for real-time human pose and hand landmark detection using **MediaPipe**. This project enables accurate body pose estimation and hand tracking on both mobile devices (Android/iOS) and the Unity Editor.
+A Fruit Ninja style game where you slice fruits using hand tracking via MediaPipe pose landmarks.
 
-![GIF-2025-12-12-18-27-49](https://github.com/user-attachments/assets/83020b12-8e1e-46de-b2ad-4525c188f0d0)
-
-
-![Unity](https://img.shields.io/badge/Unity-2021.3+-black?logo=unity)
-![MediaPipe](https://img.shields.io/badge/MediaPipe-0.16.3-blue)
-![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Editor-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
-
----
-
-## ✨ Features
-
-- **Real-Time Pose Detection** — Track 33 body landmarks with high accuracy
-- **Hand Tracking** — Detect hand landmarks with custom visual effects (like fire effects!)
-- **GPU Acceleration** — Optimized for mobile with GPU inference support
-- **Cross-Platform** — Works on Android, iOS, and Unity Editor
-- **Easy Setup** — One-click scene setup via Unity Editor tools
-- **Customizable Visuals** — Adjustable landmark sizes, connection widths, and custom shaders
-- **Automatic Camera Handling** — Front-facing camera default on mobile with rotation-aware aspect fitting
+**Features:**
+- **Hand Tracking Slicing:** Use your hand as a blade.
+- **Neon Blade Trail:** Smooth, glowing blue trail (Cyan → Deep Blue).
+- **Bomb Mechanics:** Camera shake + screen flash + slow-motion game over.
+- **Scoring System:** Points, Combos, and High Scores.
+- **Dynamic UI:** Custom "Shojumaru" font, animated popups, and FPS counter.
 
 ---
 
-## 🚀 Quick Start
+## Quick Setup (5 Minutes)
 
-### Prerequisites
+### 1. Create Scene
 
-- **Unity 2021.3** or later
-- **MediaPipe Unity Plugin** (`com.github.homuler.mediapipe` v0.16.2+)
+1. Duplicate the existing `PoseLandmarkDetection` scene
+2. Save it as `Assets/FruitNinja/Scenes/FruitNinja.unity`
 
-### Installation
+### 2. Replace Hand Controller
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/Real-Time-Pose---Hand-Tracking.git
-   ```
+On the `PoseDetector` GameObject:
+1. Remove or disable `HandFireballController` component
+2. Add `HandSliceController` component (from FruitNinja namespace)
 
-2. Open the project in Unity
+### 3. Add Game Controller
 
-3. Install the MediaPipe Unity Plugin:
-   - Download from [MediaPipe Unity Plugin Releases](https://github.com/homuler/MediaPipeUnityPlugin/releases)
-   - In Unity: `Window > Package Manager > + > Add package from tarball...`
-   - Select the downloaded `.tgz` file
+1. Create an empty GameObject named `GameController`
+2. Add `FruitNinjaGameController` component
+3. Add `ScoreManager` component
+4. Add `GameUI` component
 
-### Scene Setup
+### 4. Assign Assets (Polished UI)
 
-Use the automated setup tool:
+On the **GameUI** component:
+1. Find the **Custom Font** field.
+2. Drag the `Shojumaru SDF` asset from `Assets/FruitNinja/Fonts/` into it.
+   *(If missing, create it: Right-click `Shojumaru-Regular.ttf` -> Create -> TextMeshPro -> Font Asset)*
 
-1. Go to **Tools > Pose SDK** in the Unity menu
-2. Click **Setup Scene**
-3. This creates a complete scene with:
-   - **Bootstrap** — Initializes MediaPipe
-   - **PoseDetector** — Runs AI inference and handles rendering
-   - **Canvas/RawImage** — Displays the camera feed
+### 5. Configure (Optional)
 
----
+The game works with defaults, but you can adjust:
 
-## 📱 Mobile Configuration
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Max Lives | 3 | Lives before game over |
+| Bomb Chance | 10% | Probability of bomb spawn |
+| Launch Force | 11-15 | Upward velocity of fruits (Higher = higher jump) |
+| Fruit Size | 0.8 | Scale of fruit circles |
 
-### Android Requirements
+### 6. Play!
 
-For GPU acceleration to work properly:
-
-1. Go to **Project Settings > Player > Android > Other Settings**
-2. **Uncheck** `Auto Graphics API`
-3. **Remove Vulkan** (not supported by MediaPipe GPU)
-4. Add **OpenGLES3** as the first/only graphics API
-5. Set **Minimum API Level** to Android 7.0 (Nougat) or higher
-
-### iOS Requirements
-
-1. Ensure **Metal** is enabled (default)
-2. Add Camera Usage Description in `Info.plist`
+- Run the scene
+- Wave your hand in front of the camera
+- Game starts automatically after hand detection ("Wave to start" text pulses)
+- Swipe your hand to slice fruits!
 
 ---
 
-## ⚙️ Configuration
+## Game Rules
 
-### Resolution Settings
+- **Slice fruits** = +10-15 points
+- **Rapid slices** = Combo bonus (+5 per extra) + "Pop" animation
+- **Miss a fruit** = **NO Penalty** (Keep going!)
+- **Slice a bomb** = **Lose 1 life** + Camera Shake + Red Flash
+- **0 lives** = Game Over (Slow motion effect)
 
-To adjust detection quality:
+## Fruit Types (Default)
 
-1. Find the **AppSettings** ScriptableObject asset
-2. Under **WebCam Source**, set **Preferred Default Web Cam Width**:
-   - `1920` — Full HD
-   - `2560` — 2K
-   - `3840` — 4K
-
-### Visual Customization
-
-Modify the **MultiPoseLandmarkList Annotation** prefab:
-
-| Setting | Description | Range |
-|---------|-------------|-------|
-| Connection Width | Line thickness | 0-20 |
-| Landmark Radius | Point size | 0-10 |
+| Fruit | Color | Points | Size |
+|-------|-------|--------|------|
+| Apple | Red | 10 | Normal |
+| Orange | Orange | 10 | Normal |
+| Watermelon | Green | 15 | Large |
+| Banana | Yellow | 10 | Small |
+| Grape | Purple | 10 | Small |
+| Bomb | Black | -1 life | Normal |
 
 ---
 
-## 🔥 Special Effects
+## Script Reference
 
-This project includes custom visual effects:
-
-- **Fire Effects** — Procedural fire shader for hand tracking visualizations
-- **Custom Shaders** — Located in `Assets/Fire Effects/`
-
----
-
-## 📁 Project Structure
-
-```
-Real-Time-Pose---Hand-Tracking/
-├── Assets/
-│   ├── PoseLandmarkSDK/      # Runtime scripts, prefabs, shaders
-│   ├── Fire Effects/          # Custom fire effect materials & shaders
-│   ├── Scenes/                # Sample scenes
-│   └── StreamingAssets/       # MediaPipe model files
-├── Packages/
-│   └── PoseLandmarkSDK/       # Core SDK package
-└── ProjectSettings/           # Unity project settings
-```
+| Script | Purpose |
+|--------|---------|
+| `FruitNinjaGameController` | Game loop, spawning, creates fruits at runtime |
+| `HandSliceController` | Hand tracking, smooth trail interpolation (`SmoothDamp`) |
+| `Fruit` | Fruit physics, slicing logic, full-size sliced halves |
+| `ScorePopup` | Floating score text with bounce animation |
+| `GameUI` | Manages all UI, custom fonts, animations, FPS counter |
 
 ---
 
-## 🐛 Troubleshooting
+## Customization
 
-| Issue | Solution |
-|-------|----------|
-| **"ImageReadMode.GPU not supported" in Editor** | This is normal — the Editor uses CPU fallback. GPU only works on device. |
-| **Black screen on device** | Ensure you're using **OpenGLES3**, not Vulkan. Check camera permissions. |
-| **Landmarks floating/misaligned** | Ensure PoseDetector is a child of RawImage. Set Canvas to `Screen Space - Camera`. |
-| **Low FPS on high-end devices** | Check that GPU inference is enabled. Verify OpenGLES3 is configured. |
-| **Camera permissions crash** | The SDK now waits for explicit user permission before initializing. |
+### Add Custom Fruit Types
 
----
+1. Right-click → Create → FruitNinja → Fruit Data
+2. Set color, points, size multiplier
+3. Assign to `FruitNinjaGameController.Fruit Data Assets` array
 
-## 🛠️ Technical Details
+### Adjust Hand Sensitivity
 
-### Key Components
+On `HandSliceController`:
+- `Min Slice Velocity`: Lower = easier slicing (default: 300)
+- `Slice Radius`: Higher = larger slice area (default: 50)
+- `Visibility Threshold`: Hand detection sensitivity (default: 0.5)
 
-- **PoseLandmarkerRunner** — Main component for pose detection
-- **WebCamSource** — Camera input handler with mobile priority
-- **SimplePoseAnnotationController** — Safe prefab instantiation for landmarks
-- **Screen.cs** — Rotation-aware aspect fitting for proper display
+### Spawn Area
 
-### Performance Optimizations
-
-- Forced GPU inference on Android/iOS for real-time performance
-- Automatic fallback to CPU in Unity Editor
-- Efficient async image read modes for iOS
+On `FruitNinjaGameController`:
+- `Spawn Y`: Vertical spawn position (default: -5)
+- `Spawn X Min/Max`: Horizontal range (default: -3 to 3)
 
 ---
 
-## 📚 Documentation
+## Troubleshooting
 
-For detailed integration instructions, see [Integration_Guide.md](./Integration_Guide.md).
+### "Destroying assets is not permitted"
+- Fixed in `FruitNinjaGameController`. It now correctly distinguishes between runtime data and asset data.
 
----
+### Font not showing
+- Ensure `Shojumaru SDF` is assigned to `GameUI` -> `Custom Font`.
 
-## 📄 License
-
-This project is licensed under the MIT License.
-
----
-
-## 🙏 Acknowledgments
-
-- [MediaPipe](https://mediapipe.dev/) by Google
-- [MediaPipe Unity Plugin](https://github.com/homuler/MediaPipeUnityPlugin) by homuler
-
----
-
-
+### Fruits jump too low
+- Increase `Min/Max Launch Force` on `FruitNinjaGameController` (current recommended: 11-15).

@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37573c157aa9e4579af70be7dc5977e1, type: 3}
+  m_Name: GrapesData
+  m_EditorClassIdentifier: FruitNinja::FruitNinja.FruitData
+  wholeSprite: {fileID: 21300000, guid: 742005092bd43724dbff1cfacf6ba157, type: 3}
+  slicedHalf1: {fileID: 21300000, guid: ff308402cfc3f524ca3a326afe34c24b, type: 3}
+  slicedHalf2: {fileID: 21300000, guid: 2337ecad7a5dc314e830470f83cacf41, type: 3}
+  fruitColor: {r: 0.5, g: 0.2, b: 0.7, a: 1}
+  juiceColor: {r: 0.5, g: 0.2, b: 0.7, a: 1}
+  fruitName: Grapes
+  pointValue: 10
+  sizeMultiplier: 0.9
+  speedMultiplier: 1
+  isBomb: 0
+  bombPenalty: 1
