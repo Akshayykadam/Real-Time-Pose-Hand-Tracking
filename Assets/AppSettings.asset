@@ -19,7 +19,7 @@ MonoBehaviour:
   _glogMinloglevel: 0
   _glogStderrthreshold: 2
   _glogV: 0
-  _preferredDefaultWebCamWidth: 1920
+  _preferredDefaultWebCamWidth: 1280
   _defaultAvailableWebCamResolutions:
   - width: 176
     height: 144
