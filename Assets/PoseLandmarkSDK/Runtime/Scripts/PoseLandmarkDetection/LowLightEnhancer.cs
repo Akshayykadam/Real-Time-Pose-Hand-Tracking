@@ -1,12 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Rendering;
+using Unity.Collections;
 
 namespace Mediapipe.Unity.PoseLandmarkSDK
 {
     /// <summary>
     /// Applies low-light enhancement to the webcam feed for better pose detection
-    /// in dark environments. Attach this to the same GameObject as the RawImage
-    /// displaying the webcam feed.
+    /// in dark environments. Uses async GPU readback for zero frame drops.
     /// </summary>
     [RequireComponent(typeof(RawImage))]
     public class LowLightEnhancer : MonoBehaviour
@@ -31,30 +32,70 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
         [Tooltip("Gamma correction (lower = brighter shadows)")]
         [SerializeField, Range(0.3f, 2.0f)] private float _gamma = 0.9f;
 
+        [Header("Advanced Enhancement")]
+        [Tooltip("Enable local contrast enhancement (CLAHE-inspired)")]
+        [SerializeField] private bool _enableLocalContrast = true;
+        
+        [Tooltip("Local contrast strength")]
+        [SerializeField, Range(0f, 1f)] private float _localContrastStrength = 0.3f;
+        
+        [Tooltip("Noise reduction strength for low-light")]
+        [SerializeField, Range(0f, 1f)] private float _noiseReduction = 0.2f;
+        
+        [Tooltip("Vignette correction (brighten edges)")]
+        [SerializeField, Range(0f, 1f)] private float _vignetteCorrection = 0.1f;
+
         [Header("Auto-Adjust Settings")]
         [Tooltip("Target average brightness (0-1)")]
         [SerializeField, Range(0.2f, 0.6f)] private float _targetBrightness = 0.4f;
         
         [Tooltip("How quickly to adjust (lower = smoother)")]
         [SerializeField, Range(0.01f, 0.2f)] private float _adjustSpeed = 0.05f;
+        
+        [Tooltip("Sample interval in seconds")]
+        [SerializeField, Range(0.05f, 0.5f)] private float _sampleInterval = 0.1f;
 
         private RawImage _rawImage;
         private Material _enhancementMaterial;
         private Material _originalMaterial;
         private Shader _enhancementShader;
-        private Texture2D _sampleTexture;
+        
+        // Async GPU readback
+        private bool _asyncReadbackPending = false;
+        private float _lastSampleTime = 0f;
         private float _currentBrightness = 1.0f;
-        private float _frameCounter = 0f;
+        private float _measuredBrightness = 0.5f;
+        
+        // Ring buffer for smooth brightness transitions
+        private const int BRIGHTNESS_BUFFER_SIZE = 5;
+        private float[] _brightnessBuffer = new float[BRIGHTNESS_BUFFER_SIZE];
+        private int _brightnessBufferIndex = 0;
+        private bool _brightnessBufferFilled = false;
+
+        // Shader property IDs (cached for performance)
+        private static readonly int _BrightnessId = Shader.PropertyToID("_Brightness");
+        private static readonly int _ContrastId = Shader.PropertyToID("_Contrast");
+        private static readonly int _SaturationId = Shader.PropertyToID("_Saturation");
+        private static readonly int _GammaId = Shader.PropertyToID("_Gamma");
+        private static readonly int _LocalContrastId = Shader.PropertyToID("_LocalContrast");
+        private static readonly int _NoiseReductionId = Shader.PropertyToID("_NoiseReduction");
+        private static readonly int _VignetteCorrectionId = Shader.PropertyToID("_VignetteCorrection");
 
         private void Awake()
         {
             _rawImage = GetComponent<RawImage>();
             
-            // Load the shader
-            _enhancementShader = Shader.Find("PoseLandmarkSDK/LowLightEnhancement");
+            // Load the enhanced shader
+            _enhancementShader = Shader.Find("PoseLandmarkSDK/LowLightEnhancementV2");
             if (_enhancementShader == null)
             {
-                Debug.LogWarning("LowLightEnhancement shader not found. Low-light enhancement disabled.");
+                // Fall back to original shader
+                _enhancementShader = Shader.Find("PoseLandmarkSDK/LowLightEnhancement");
+            }
+            
+            if (_enhancementShader == null)
+            {
+                Debug.LogWarning("[LowLightEnhancer] Shader not found. Low-light enhancement disabled.");
                 enabled = false;
                 return;
             }
@@ -63,8 +104,11 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             _enhancementMaterial = new Material(_enhancementShader);
             _originalMaterial = _rawImage.material;
             
-            // Create small texture for brightness sampling
-            _sampleTexture = new Texture2D(8, 8, TextureFormat.RGB24, false);
+            // Initialize brightness buffer
+            for (int i = 0; i < BRIGHTNESS_BUFFER_SIZE; i++)
+            {
+                _brightnessBuffer[i] = 0.5f;
+            }
         }
 
         private void OnEnable()
@@ -90,73 +134,116 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
 
             if (_autoAdjust)
             {
-                AutoAdjustBrightness();
+                TryStartAsyncBrightnessSample();
             }
             
             UpdateMaterialProperties();
         }
 
-        private void AutoAdjustBrightness()
+        /// <summary>
+        /// Start async brightness sampling using GPU readback (no frame drops)
+        /// </summary>
+        private void TryStartAsyncBrightnessSample()
         {
-            // Sample brightness every few frames to save performance
-            _frameCounter += Time.deltaTime;
-            if (_frameCounter < 0.1f) return;
-            _frameCounter = 0f;
+            // Check interval and ensure we're not already waiting
+            if (_asyncReadbackPending || Time.time - _lastSampleTime < _sampleInterval)
+                return;
 
-            if (_rawImage.texture == null) return;
+            if (_rawImage.texture == null)
+                return;
 
-            // Estimate average brightness from texture
-            float avgBrightness = EstimateAverageBrightness();
-            
-            // Adjust brightness to reach target
-            if (avgBrightness > 0.01f)
+            RenderTexture rt = _rawImage.texture as RenderTexture;
+            if (rt == null)
+                return;
+
+            _lastSampleTime = Time.time;
+            _asyncReadbackPending = true;
+
+            // Request async readback of a small portion of the texture
+            int sampleSize = Mathf.Min(16, rt.width, rt.height);
+            int x = (rt.width - sampleSize) / 2;
+            int y = (rt.height - sampleSize) / 2;
+
+            AsyncGPUReadback.Request(rt, 0, x, sampleSize, y, sampleSize, 0, 1, OnAsyncReadbackComplete);
+        }
+
+        /// <summary>
+        /// Callback when async GPU readback completes
+        /// </summary>
+        private void OnAsyncReadbackComplete(AsyncGPUReadbackRequest request)
+        {
+            _asyncReadbackPending = false;
+
+            if (request.hasError)
             {
-                float targetMultiplier = _targetBrightness / avgBrightness;
-                targetMultiplier = Mathf.Clamp(targetMultiplier, 0.8f, 2.5f);
-                
-                _currentBrightness = Mathf.Lerp(_currentBrightness, targetMultiplier, _adjustSpeed);
+                return;
+            }
+
+            try
+            {
+                // Get the data as Color32 (most common format)
+                if (request.hasError) return;
+                var pixels = request.GetData<Color32>();
+                if (pixels.IsCreated)
+                {
+                    float totalBrightness = 0f;
+                    int count = pixels.Length;
+
+                    // Sample every 4th pixel for performance
+                    int step = Mathf.Max(1, count / 64);
+                    int sampledCount = 0;
+
+                    for (int i = 0; i < count; i += step)
+                    {
+                        Color32 pixel = pixels[i];
+                        // ITU-R BT.709 luminance formula
+                        float brightness = (pixel.r * 0.2126f + pixel.g * 0.7152f + pixel.b * 0.0722f) / 255f;
+                        totalBrightness += brightness;
+                        sampledCount++;
+                    }
+
+                    if (sampledCount > 0)
+                    {
+                        _measuredBrightness = totalBrightness / sampledCount;
+                        
+                        // Add to ring buffer
+                        _brightnessBuffer[_brightnessBufferIndex] = _measuredBrightness;
+                        _brightnessBufferIndex = (_brightnessBufferIndex + 1) % BRIGHTNESS_BUFFER_SIZE;
+                        if (_brightnessBufferIndex == 0) _brightnessBufferFilled = true;
+
+                        // Calculate smoothed average
+                        float smoothedBrightness = CalculateSmoothedBrightness();
+                        
+                        // Adjust multiplier to reach target
+                        if (smoothedBrightness > 0.01f)
+                        {
+                            float targetMultiplier = _targetBrightness / smoothedBrightness;
+                            targetMultiplier = Mathf.Clamp(targetMultiplier, 0.8f, 2.5f);
+                            _currentBrightness = Mathf.Lerp(_currentBrightness, targetMultiplier, _adjustSpeed);
+                        }
+                    }
+                }
+            }
+            catch (System.Exception)
+            {
+                // Silently handle any errors during readback processing
             }
         }
 
-        private float EstimateAverageBrightness()
+        /// <summary>
+        /// Calculate average from ring buffer for smooth transitions
+        /// </summary>
+        private float CalculateSmoothedBrightness()
         {
-            // Simple estimation using GPU readback (can be expensive)
-            // For production, consider using compute shaders or async readback
-            
-            RenderTexture rt = _rawImage.texture as RenderTexture;
-            if (rt == null) return 0.5f;
+            int count = _brightnessBufferFilled ? BRIGHTNESS_BUFFER_SIZE : _brightnessBufferIndex;
+            if (count == 0) return 0.5f;
 
-            RenderTexture currentRT = RenderTexture.active;
-            RenderTexture.active = rt;
-            
-            // Sample a small region from center
-            int sampleSize = 8;
-            int x = (rt.width - sampleSize) / 2;
-            int y = (rt.height - sampleSize) / 2;
-            
-            try
+            float sum = 0f;
+            for (int i = 0; i < count; i++)
             {
-                _sampleTexture.ReadPixels(new UnityEngine.Rect(x, y, sampleSize, sampleSize), 0, 0);
-                _sampleTexture.Apply();
+                sum += _brightnessBuffer[i];
             }
-            catch
-            {
-                RenderTexture.active = currentRT;
-                return 0.5f;
-            }
-            
-            RenderTexture.active = currentRT;
-
-            // Calculate average brightness
-            UnityEngine.Color[] pixels = _sampleTexture.GetPixels();
-            float totalBrightness = 0f;
-            for (int i = 0; i < pixels.Length; i++)
-            {
-                UnityEngine.Color pixel = pixels[i];
-                totalBrightness += (pixel.r * 0.299f + pixel.g * 0.587f + pixel.b * 0.114f);
-            }
-            
-            return totalBrightness / pixels.Length;
+            return sum / count;
         }
 
         private void UpdateMaterialProperties()
@@ -165,10 +252,18 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
 
             float finalBrightness = _autoAdjust ? _currentBrightness : _brightness;
             
-            _enhancementMaterial.SetFloat("_Brightness", finalBrightness);
-            _enhancementMaterial.SetFloat("_Contrast", _contrast);
-            _enhancementMaterial.SetFloat("_Saturation", _saturation);
-            _enhancementMaterial.SetFloat("_Gamma", _gamma);
+            _enhancementMaterial.SetFloat(_BrightnessId, finalBrightness);
+            _enhancementMaterial.SetFloat(_ContrastId, _contrast);
+            _enhancementMaterial.SetFloat(_SaturationId, _saturation);
+            _enhancementMaterial.SetFloat(_GammaId, _gamma);
+            
+            // Advanced properties (V2 shader)
+            if (_enhancementMaterial.HasProperty(_LocalContrastId))
+            {
+                _enhancementMaterial.SetFloat(_LocalContrastId, _enableLocalContrast ? _localContrastStrength : 0f);
+                _enhancementMaterial.SetFloat(_NoiseReductionId, _noiseReduction);
+                _enhancementMaterial.SetFloat(_VignetteCorrectionId, _vignetteCorrection);
+            }
         }
 
         private void OnDestroy()
@@ -177,11 +272,9 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             {
                 Destroy(_enhancementMaterial);
             }
-            if (_sampleTexture != null)
-            {
-                Destroy(_sampleTexture);
-            }
         }
+
+        #region Public API
 
         /// <summary>
         /// Enable/disable low-light enhancement at runtime
@@ -194,6 +287,21 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                 _rawImage.material = enabled ? _enhancementMaterial : _originalMaterial;
             }
         }
+
+        /// <summary>
+        /// Check if enhancement is active
+        /// </summary>
+        public bool IsEnabled => _enabled && _enhancementMaterial != null;
+
+        /// <summary>
+        /// Get current measured brightness (0-1)
+        /// </summary>
+        public float MeasuredBrightness => _measuredBrightness;
+
+        /// <summary>
+        /// Get current brightness multiplier being applied
+        /// </summary>
+        public float CurrentBrightnessMultiplier => _currentBrightness;
 
         /// <summary>
         /// Manually set brightness multiplier
@@ -212,5 +320,17 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             _autoAdjust = enable;
             _targetBrightness = targetBrightness;
         }
+
+        /// <summary>
+        /// Configure advanced enhancement settings
+        /// </summary>
+        public void SetAdvancedSettings(float localContrast = 0.3f, float noiseReduction = 0.2f, float vignetteCorrection = 0.1f)
+        {
+            _localContrastStrength = Mathf.Clamp01(localContrast);
+            _noiseReduction = Mathf.Clamp01(noiseReduction);
+            _vignetteCorrection = Mathf.Clamp01(vignetteCorrection);
+        }
+
+        #endregion
     }
 }
