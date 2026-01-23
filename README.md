@@ -154,11 +154,6 @@ Packages/
 
 ---
 
-## 📄 License
-MIT License.
-
----
-
 ## 🙏 Acknowledgments
 - [MediaPipe Unity Plugin](https://github.com/homuler/MediaPipeUnityPlugin) by homuler
 - [1€ Filter](http://cristal.univ-lille.fr/~casiez/1euro/) by Gery Casiez et al.
