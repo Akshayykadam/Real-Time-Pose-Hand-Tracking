@@ -2,8 +2,6 @@
 
 A high-performance Unity SDK for real-time human pose and hand landmark detection using **MediaPipe**. This project enables accurate body pose estimation and hand tracking on mobile devices (Android/iOS) and the Unity Editor, featuring industrial-strength filtering and optimization.
 
-![GIF-2025-12-12-18-27-49](https://github.com/user-attachments/assets/83020b12-8e1e-46de-b2ad-4525c188f0d0)
-
 
 ![Unity](https://img.shields.io/badge/Unity-2021.3+-black?logo=unity)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-0.16.2-blue)
