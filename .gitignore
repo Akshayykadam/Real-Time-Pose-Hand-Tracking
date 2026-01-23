@@ -73,4 +73,7 @@ Thumbs.db
 
 # Backups
 *_BackUpThisFolder_ButDontShipItWithYourGame/
+
+# Burst debug information
+*_BurstDebugInformation_DoNotShip/
 Assets_220126.zip
