@@ -1,6 +1,6 @@
-# 🏃‍♂️ Real-Time Pose & Hand Tracking SDK
+# 🏃‍♂️ Real-Time Pose & Hand Tracking Framework
 
-A high-performance Unity SDK for real-time human pose and hand landmark detection using **MediaPipe**. This project enables accurate body pose estimation and hand tracking on mobile devices (Android/iOS) and the Unity Editor, featuring industrial-strength filtering and optimization.
+A high-performance Unity Framework for real-time human pose and hand landmark detection using **MediaPipe**. This project enables accurate body pose estimation and hand tracking on mobile devices (Android/iOS) and the Unity Editor, featuring industrial-strength filtering and optimization.
 
 
 ![Unity](https://img.shields.io/badge/Unity-2021.3+-black?logo=unity)
