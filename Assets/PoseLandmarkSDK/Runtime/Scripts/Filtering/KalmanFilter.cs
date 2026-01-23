@@ -5,6 +5,7 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
     /// <summary>
     /// Kalman Filter implementation for 3D monitoring of position, velocity, and acceleration.
     /// Provides robust estimation in noisy conditions (low light, fast movement).
+    /// Supports axis-specific measurement noise for improved Z-axis (depth) handling.
     /// </summary>
     public class KalmanFilter
     {
@@ -25,11 +26,19 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
         // Configuration
         private float _processNoise = 1e-4f;
         private float _measurementNoise = 1e-2f;
+        private float _zMeasurementNoiseMultiplier = 3.0f; // Z-axis is 3x noisier by default
 
-        public KalmanFilter(float processNoise = 1e-4f, float measurementNoise = 1e-2f)
+        /// <summary>
+        /// Create a Kalman filter with configurable noise parameters.
+        /// </summary>
+        /// <param name="processNoise">Process noise covariance</param>
+        /// <param name="measurementNoise">Base measurement noise for X/Y axes</param>
+        /// <param name="zNoiseMultiplier">Multiplier for Z-axis measurement noise (default: 3.0 = less trust in Z)</param>
+        public KalmanFilter(float processNoise = 1e-4f, float measurementNoise = 1e-2f, float zNoiseMultiplier = 3.0f)
         {
             _processNoise = processNoise;
             _measurementNoise = measurementNoise;
+            _zMeasurementNoiseMultiplier = zNoiseMultiplier;
             Reset();
         }
 
@@ -45,9 +54,21 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             System.Array.Clear(_Q, 0, _Q.Length);
             for (int i = 0; i < STATE_DIM; i++) _Q[i * STATE_DIM + i] = _processNoise;
 
-            // Initialize R (measurement noise)
+            // Initialize R (measurement noise) - Axis-specific
             System.Array.Clear(_R, 0, _R.Length);
-            for (int i = 0; i < MEASURE_DIM; i++) _R[i * MEASURE_DIM + i] = _measurementNoise;
+            _R[0] = _measurementNoise;                                    // X-axis
+            _R[4] = _measurementNoise;                                    // Y-axis
+            _R[8] = _measurementNoise * _zMeasurementNoiseMultiplier;     // Z-axis (higher noise = less trust)
+        }
+        
+        /// <summary>
+        /// Update the Z-axis measurement noise multiplier.
+        /// Higher values mean less trust in Z measurements.
+        /// </summary>
+        public void SetZNoiseMultiplier(float multiplier)
+        {
+            _zMeasurementNoiseMultiplier = Mathf.Max(1.0f, multiplier);
+            _R[8] = _measurementNoise * _zMeasurementNoiseMultiplier;
         }
 
         public Vector3 Update(Vector3 measurement, float timestamp)

@@ -45,12 +45,14 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
         private Dictionary<int, KalmanFilter[]> _kalmanFilters = new Dictionary<int, KalmanFilter[]>();
         private Dictionary<int, LandmarkState[]> _states = new Dictionary<int, LandmarkState[]>();
         private PosePredictor _predictor = new PosePredictor();
+        private ZAxisStabilizer _zAxisStabilizer = new ZAxisStabilizer();
         
         // Configuration
         private FilterType _activeFilterType = FilterType.OneEuro;
         private float _visibilityThreshold = 0.3f;
         private int _maxOcclusionFrames = 10;
         private bool _enableOcclusionPersistence = true;
+        private bool _enableZAxisStabilization = true;
 
         // Current parameters
         private float _minCutoff = 1.0f;
@@ -94,6 +96,26 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             _maxOcclusionFrames = maxFrames;
             _visibilityThreshold = visibilityThreshold;
         }
+        
+        /// <summary>
+        /// Configure Z-axis stabilization settings.
+        /// </summary>
+        public void SetZAxisStabilization(bool enabled, bool useConfidenceWeighting = true, 
+                                          bool useRelativeAnchoring = true, bool useAnatomicalConstraints = true,
+                                          float zScaleFactor = 1.0f, int slidingWindowSize = 5)
+        {
+            _enableZAxisStabilization = enabled;
+            _zAxisStabilizer.UseConfidenceWeighting = useConfidenceWeighting;
+            _zAxisStabilizer.UseRelativeAnchoring = useRelativeAnchoring;
+            _zAxisStabilizer.UseAnatomicalConstraints = useAnatomicalConstraints;
+            _zAxisStabilizer.ZScaleFactor = zScaleFactor;
+            _zAxisStabilizer.SlidingWindowSize = slidingWindowSize;
+        }
+        
+        /// <summary>
+        /// Get the Z-axis stabilizer for direct configuration.
+        /// </summary>
+        public ZAxisStabilizer GetZAxisStabilizer() => _zAxisStabilizer;
 
         public LandmarkState FilterLandmark(int poseIndex, int landmarkIndex, Vector3 rawPosition, 
             float visibility, float timestamp)
@@ -216,6 +238,37 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                 
             _states.Clear();
             _predictor = new PosePredictor();
+            _zAxisStabilizer.Reset();
+        }
+        
+        /// <summary>
+        /// Apply Z-axis stabilization to all landmarks for a pose.
+        /// Should be called after filtering all landmarks.
+        /// </summary>
+        public void StabilizeZAxis(int poseIndex)
+        {
+            if (!_enableZAxisStabilization || !_states.ContainsKey(poseIndex)) return;
+            
+            // Extract positions and visibilities
+            Vector3[] positions = new Vector3[MAX_LANDMARKS];
+            float[] visibilities = new float[MAX_LANDMARKS];
+            
+            for (int i = 0; i < MAX_LANDMARKS; i++)
+            {
+                positions[i] = _states[poseIndex][i].Position;
+                visibilities[i] = _states[poseIndex][i].Visibility;
+            }
+            
+            // Apply Z-axis stabilization
+            _zAxisStabilizer.Stabilize(poseIndex, positions, visibilities);
+            
+            // Write back stabilized positions
+            for (int i = 0; i < MAX_LANDMARKS; i++)
+            {
+                var state = _states[poseIndex][i];
+                state.Position = positions[i];
+                _states[poseIndex][i] = state;
+            }
         }
 
         public (int visibleCount, int occludedCount, float avgConfidence) GetTrackingStats(int poseIndex)
@@ -237,6 +290,18 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                 }
             }
             return (visible, occluded, totalConf / Mathf.Max(1, visible + occluded));
+        }
+        
+        /// <summary>
+        /// Get the current filtered state for a specific landmark.
+        /// Returns null if the pose/landmark is not tracked.
+        /// </summary>
+        public LandmarkState? GetFilteredState(int poseIndex, int landmarkIndex)
+        {
+            if (!_states.ContainsKey(poseIndex) || landmarkIndex >= MAX_LANDMARKS || landmarkIndex < 0)
+                return null;
+            
+            return _states[poseIndex][landmarkIndex];
         }
     }
 }

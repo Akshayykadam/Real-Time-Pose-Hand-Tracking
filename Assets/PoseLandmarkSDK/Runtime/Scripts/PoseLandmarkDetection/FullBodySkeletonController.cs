@@ -40,6 +40,22 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
         [SerializeField] private bool _enableOcclusionPersistence = true;
         [SerializeField, Range(1, 60)] private int _occlusionPersistenceFrames = 15;
         
+        [Header("Z-Axis (Depth) Stabilization")]
+        [Tooltip("Enable enhanced Z-axis stabilization for improved depth accuracy")]
+        [SerializeField] private bool _enableZAxisStabilization = true;
+        
+        [Tooltip("Use anatomical bone length constraints to correct impossible depth values")]
+        [SerializeField] private bool _useAnatomicalConstraints = true;
+        
+        [Tooltip("Use confidence-weighted Z blending (low visibility = less trust in depth)")]
+        [SerializeField] private bool _useConfidenceWeighting = true;
+        
+        [Tooltip("Scale factor for Z offsets from hip center (lower = flatter, higher = more depth variation)")]
+        [SerializeField, Range(0.3f, 2.0f)] private float _zScaleFactor = 1.0f;
+        
+        [Tooltip("Number of frames to average for temporal Z smoothing")]
+        [SerializeField, Range(1, 10)] private int _zSlidingWindowSize = 5;
+        
         [Header("Adaptive Smoothing")]
         [SerializeField] private bool _enableAdaptiveSmoothing = true;
         [SerializeField, Range(0.1f, 2f)] private float _fastMovementThreshold = 0.5f;
@@ -106,6 +122,16 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             _filterManager = new LandmarkFilterManager(_filterPreset);
             _filterManager.SetFilterType(_filterType);
             _filterManager.SetOcclusionHandling(_enableOcclusionPersistence, _occlusionPersistenceFrames, _visibilityThreshold);
+            
+            // Configure Z-axis stabilization
+            _filterManager.SetZAxisStabilization(
+                _enableZAxisStabilization,
+                _useConfidenceWeighting,
+                true, // useRelativeAnchoring
+                _useAnatomicalConstraints,
+                _zScaleFactor,
+                _zSlidingWindowSize
+            );
             
             if (_useJobSystem) InitializeJobBuffers();
 
@@ -253,6 +279,8 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                     MinCutoff = 1.0f, // TODO: Get from manager params
                     Beta = 0.007f,
                     DCutoff = 1.0f,
+                    ZMinCutoffMultiplier = 0.5f, // Z gets 2x more smoothing
+                    ZBetaMultiplier = 0.5f,      // Z gets less speed responsiveness
                     FilteredPositions = _jobFilteredPositions,
                     LastRawPositions = _jobLastRawPositions,
                     InternalState = _jobInternalState,
@@ -268,6 +296,7 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                     DeltaTime = 0.016f, // Approximation
                     ProcessNoise = 1e-4f,
                     MeasurementNoise = 1e-2f,
+                    ZMeasurementNoiseMultiplier = 3.0f, // Trust Z 3x less
                     State = _jobKalmanState,
                     Covariance = _jobCovariance,
                     IsInitialized = _jobInitialized,
@@ -334,6 +363,22 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                     _cachedVisibility[poseIdx][i] = state.Confidence;
 
                     OnLandmarkUpdated?.Invoke(poseIdx, i, state);
+                }
+                
+                // Apply Z-axis stabilization after filtering all landmarks for this pose
+                if (_enableZAxisStabilization)
+                {
+                    _filterManager.StabilizeZAxis(poseIdx);
+                    
+                    // Update cached positions with stabilized Z values
+                    for (int i = 0; i < landmarks.Count && i < MAX_LANDMARKS; i++)
+                    {
+                        var state = _filterManager.GetFilteredState(poseIdx, i);
+                        if (state.HasValue)
+                        {
+                            _cachedPositions[poseIdx][i] = state.Value.Position;
+                        }
+                    }
                 }
             }
         }

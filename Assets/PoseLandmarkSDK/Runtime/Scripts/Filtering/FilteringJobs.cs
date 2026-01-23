@@ -20,10 +20,14 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             [ReadOnly] public NativeArray<float> Timestamps;
             [ReadOnly] public float CurrentTime;
             
-            // Parameters (Shared)
+            // Parameters (Shared for X/Y)
             [ReadOnly] public float MinCutoff;
             [ReadOnly] public float Beta;
             [ReadOnly] public float DCutoff;
+            
+            // Z-axis specific multipliers (for more aggressive Z smoothing)
+            [ReadOnly] public float ZMinCutoffMultiplier; // Default: 0.5 (2x more smoothing)
+            [ReadOnly] public float ZBetaMultiplier;      // Default: 0.5 (less speed responsiveness)
 
             // State (Read/Write)
             public NativeArray<float3> FilteredPositions;
@@ -59,7 +63,7 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
 
                 float3 filteredPos = new float3(0,0,0);
 
-                // Process X, Y, Z
+                // Process X, Y, Z with axis-specific parameters
                 for (int i = 0; i < 3; i++)
                 {
                     float val = rawPos[i];
@@ -68,12 +72,14 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                     // Estimate velocity (dx)
                     float dx = (val - lastVal) / dt;
                     
-                    // Filter flux
+                    // Filter velocity
                     int dxStateIdx = index * 6 + i * 2 + 1;
                     float edx = LowPassFilter(dx, Alpha(dt, DCutoff), ref InternalState, dxStateIdx);
 
-                    // Start cut-off
-                    float cutoff = MinCutoff + Beta * math.abs(edx);
+                    // Calculate cutoff - Z axis uses more aggressive (lower) parameters
+                    float effectiveMinCutoff = (i == 2) ? MinCutoff * ZMinCutoffMultiplier : MinCutoff;
+                    float effectiveBeta = (i == 2) ? Beta * ZBetaMultiplier : Beta;
+                    float cutoff = effectiveMinCutoff + effectiveBeta * math.abs(edx);
                     
                     // Filter signal
                     int xStateIdx = index * 6 + i * 2;
@@ -111,6 +117,9 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             // Parameters (Shared)
             [ReadOnly] public float ProcessNoise;
             [ReadOnly] public float MeasurementNoise;
+            
+            // Z-axis specific multiplier (higher = less trust in Z measurements)
+            [ReadOnly] public float ZMeasurementNoiseMultiplier; // Default: 3.0
 
             // State (Read/Write)
             // State: [x, y, z, vx, vy, vz, ax, ay, az] (9 floats per landmark)
@@ -179,7 +188,13 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
                 for (int i = 0; i < 3; i++)
                 {
                     float p = Covariance[covOffset + i];
-                    float k = p / (p + MeasurementNoise);
+                    
+                    // Use higher measurement noise for Z axis (dimension 2)
+                    float effectiveMeasurementNoise = (i == 2) 
+                        ? MeasurementNoise * ZMeasurementNoiseMultiplier 
+                        : MeasurementNoise;
+                    
+                    float k = p / (p + effectiveMeasurementNoise);
                     float residual = measures[i] - State[stateOffset + i];
                     
                     // Update state (Position only directly measured)

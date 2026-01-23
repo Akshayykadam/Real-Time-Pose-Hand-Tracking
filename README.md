@@ -19,13 +19,28 @@ A high-performance Unity SDK for real-time human pose and hand landmark detectio
 - **Occlusion Resilience** — Physics-based trajectory prediction maintains tracking when landmarks are briefly hidden (>1 sec).
 - **Adaptive Smoothing** — Automatically smooths output based on movement speed (stable when still, responsive when moving).
 
+### ✋ Hand Tracking
+- **21 Landmark Points** — Full hand skeleton with fingertips, knuckles, and palm landmarks.
+- **Dual Hand Support** — Track up to 2 hands simultaneously with independent filtering.
+- **Finger State Detection** — Built-in `IsFingerExtended()` method for gesture recognition.
+- **Gesture Helpers** — Easy access to fingertip positions via `GetFingertipPosition()`.
+- **Handedness Detection** — Identify left vs right hand automatically.
+- **Same Filtering Pipeline** — Uses the same One-Euro/Kalman filters as body tracking for smooth output.
+
+### 📐 Z-Axis (Depth) Stabilization
+- **Axis-Specific Filtering** — Z-axis receives 2x more aggressive smoothing than X/Y to handle inherently noisier depth estimates.
+- **Confidence-Weighted Blending** — Low visibility landmarks contribute less to depth calculations, reducing jitter.
+- **Anatomical Constraints** — Bone length ratios automatically correct impossible depth values (e.g., arm reaching too far forward).
+- **Relative Anchoring** — Z values expressed relative to hip center for improved stability across the skeleton.
+- **Multi-Frame Averaging** — Temporal sliding window (configurable 1-10 frames) smooths depth over time.
+
 ### 🌑 Low-Light Enhancement V2
 - **Async GPU Processing** — Enhances camera feed without dropping a single frame using `AsyncGPUReadback`.
 - **Local Contrast (CLAHE)** — Reveals details in shadows without washing out highlights.
 - **Auto-Exposure** — Dynamic brightness adjustment with smooth ring-buffer transitions.
 
 ### ⚡ Performance
-- **Unity Job System** — Parallelizes filtering for all 33 landmarks across worker threads.
+- **Unity Job System** — Parallelizes filtering for all 33 pose + 21×2 hand landmarks across worker threads.
 - **Burst Compilation** — Math-heavy operations are optimized to native machine code.
 - **Adaptive Frame Skipping** — Automatically adjusts processing rate based on device load (30-60 FPS).
 - **Zero-Allocation** — Pre-allocated buffers and object pools minimize GC spikes.
@@ -70,6 +85,30 @@ Optimized for different use cases via the `FullBodySkeletonController` component
 | **Occlusion Handling** | Uses trajectory prediction to fill gaps | `True` |
 | **Use Job System** | Multithreaded filtering (Critical for mobile) | `True` |
 
+### Hand Skeleton Controller
+Configure via the `HandSkeletonController` component:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Visibility Threshold** | Minimum confidence to consider landmark visible | 0.3 |
+| **Filter Type** | `OneEuro` or `Kalman` (same options as body) | `OneEuro` |
+| **Filter Preset** | `Responsive`, `Balanced`, `Smooth`, `VerySmooth` | `Balanced` |
+| **Smoothing Factor** | Additional exponential smoothing (0.0-1.0) | 0.5 |
+| **Use Job System** | Parallel filtering for both hands | ✓ On |
+
+### Z-Axis (Depth) Stabilization
+Found under the **"Z-Axis (Depth) Stabilization"** header in `FullBodySkeletonController`:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Enable Z-Axis Stabilization** | Master toggle for all depth improvements | ✓ On |
+| **Use Anatomical Constraints** | Corrects impossible Z values using bone lengths | ✓ On |
+| **Use Confidence Weighting** | Low visibility = less trust in depth | ✓ On |
+| **Z Scale Factor** | Depth variation strength (0.3=flat, 2.0=exaggerated) | 1.0 |
+| **Z Sliding Window Size** | Frames to average (higher=smoother, more latency) | 5 |
+
+> **Tip:** For fitness/yoga apps where users move forward/backward, set `Z Scale Factor` to 0.7-0.8 for more stable depth.
+
 ### Low Light Enhancer
 Located on the **RawImage** object:
 
@@ -102,12 +141,17 @@ Located on the **RawImage** object:
 Assets/
 ├── PoseLandmarkSDK/
 │   ├── Runtime/Scripts/
-│   │   ├── Filtering/          # OneEuro, Kalman, JobSystem
-│   │   ├── PoseLandmarkDetection/ # Controllers, Enhancers
-│   │   └── Shaders/            # LowLight, Fire Effects
-│   └── Editor/                 # Setup Tools
-├── Fire Effects/               # VFX Assets
-└── StreamingAssets/            # MediaPipe Models
+│   │   ├── Filtering/             # OneEuro, Kalman, ZAxisStabilizer, JobSystem
+│   │   ├── PoseLandmarkDetection/ # FullBodySkeletonController, HandSkeletonController
+│   │   └── Shaders/               # LowLight, Fire Effects
+│   └── Editor/                    # Setup Tools
+├── Fire Effects/                  # VFX Assets
+└── StreamingAssets/               # MediaPipe Models
+
+Packages/
+└── PoseLandmarkSDK/
+    └── Runtime/Scripts/
+        └── HandLandmarkDetection/ # HandLandmarkerRunner, Configs
 ```
 
 ---

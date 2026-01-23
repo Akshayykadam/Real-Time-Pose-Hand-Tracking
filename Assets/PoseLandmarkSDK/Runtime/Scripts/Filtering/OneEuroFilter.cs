@@ -160,19 +160,44 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
     }
 
     /// <summary>
-    /// 3D version of the One-Euro filter for landmark positions
+    /// 3D version of the One-Euro filter for landmark positions.
+    /// Supports Z-axis specific parameters for improved depth filtering.
     /// </summary>
     public class OneEuroFilter3D
     {
         private OneEuroFilter _xFilter;
         private OneEuroFilter _yFilter;
         private OneEuroFilter _zFilter;
+        
+        // Z-axis multipliers for more aggressive smoothing
+        private float _zMinCutoffMultiplier = 0.5f;  // Lower cutoff = more smoothing
+        private float _zBetaMultiplier = 0.5f;       // Lower beta = less responsiveness to speed
+        
+        private float _currentMinCutoff;
+        private float _currentBeta;
+        private float _currentDCutoff;
 
-        public OneEuroFilter3D(float minCutoff = 1.0f, float beta = 0.007f, float dCutoff = 1.0f)
+        /// <summary>
+        /// Create a 3D One-Euro filter with optional Z-axis specific parameters.
+        /// </summary>
+        /// <param name="minCutoff">Minimum cutoff frequency for X/Y axes</param>
+        /// <param name="beta">Speed coefficient for X/Y axes</param>
+        /// <param name="dCutoff">Derivative cutoff for all axes</param>
+        /// <param name="zMinCutoffMultiplier">Multiplier for Z-axis minCutoff (default 0.5 = 2x more smoothing)</param>
+        /// <param name="zBetaMultiplier">Multiplier for Z-axis beta (default 0.5 = less speed responsiveness)</param>
+        public OneEuroFilter3D(float minCutoff = 1.0f, float beta = 0.007f, float dCutoff = 1.0f,
+                                float zMinCutoffMultiplier = 0.5f, float zBetaMultiplier = 0.5f)
         {
+            _currentMinCutoff = minCutoff;
+            _currentBeta = beta;
+            _currentDCutoff = dCutoff;
+            _zMinCutoffMultiplier = zMinCutoffMultiplier;
+            _zBetaMultiplier = zBetaMultiplier;
+            
             _xFilter = new OneEuroFilter(minCutoff, beta, dCutoff);
             _yFilter = new OneEuroFilter(minCutoff, beta, dCutoff);
-            _zFilter = new OneEuroFilter(minCutoff, beta, dCutoff);
+            // Z-axis uses more aggressive (lower) parameters for smoother output
+            _zFilter = new OneEuroFilter(minCutoff * zMinCutoffMultiplier, beta * zBetaMultiplier, dCutoff);
         }
 
         public Vector3 Filter(Vector3 value, float timestamp)
@@ -198,11 +223,34 @@ namespace Mediapipe.Unity.PoseLandmarkSDK
             _zFilter.Reset(value.z);
         }
 
+        /// <summary>
+        /// Update filter parameters. Z-axis will automatically apply multipliers for extra smoothing.
+        /// </summary>
         public void SetParameters(float minCutoff, float beta, float dCutoff = 1.0f)
         {
+            _currentMinCutoff = minCutoff;
+            _currentBeta = beta;
+            _currentDCutoff = dCutoff;
+            
             _xFilter.SetParameters(minCutoff, beta, dCutoff);
             _yFilter.SetParameters(minCutoff, beta, dCutoff);
-            _zFilter.SetParameters(minCutoff, beta, dCutoff);
+            _zFilter.SetParameters(minCutoff * _zMinCutoffMultiplier, beta * _zBetaMultiplier, dCutoff);
+        }
+        
+        /// <summary>
+        /// Set Z-axis specific multipliers for additional smoothing.
+        /// </summary>
+        /// <param name="minCutoffMultiplier">Multiplier for Z minCutoff (lower = more smoothing)</param>
+        /// <param name="betaMultiplier">Multiplier for Z beta (lower = less speed responsiveness)</param>
+        public void SetZAxisMultipliers(float minCutoffMultiplier, float betaMultiplier)
+        {
+            _zMinCutoffMultiplier = Mathf.Clamp(minCutoffMultiplier, 0.1f, 1.0f);
+            _zBetaMultiplier = Mathf.Clamp(betaMultiplier, 0.1f, 1.0f);
+            
+            // Re-apply Z parameters with new multipliers
+            _zFilter.SetParameters(_currentMinCutoff * _zMinCutoffMultiplier, 
+                                   _currentBeta * _zBetaMultiplier, 
+                                   _currentDCutoff);
         }
     }
 }
